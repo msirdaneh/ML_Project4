@@ -1,0 +1,125 @@
+---
+title: "Practical Machine Learning Project"
+author: "Moath Abusirdaneh"
+date: "August 8, 2018"
+output: html_document
+---
+
+# Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement ??? a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
+
+In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: [http://groupware.les.inf.puc-rio.br/har] (see the section on the Weight Lifting Exercise Dataset).
+
+##Loading Required Packages 
+```{r}
+library(caret)
+library(ggplot2)
+library(rattle)
+```
+
+## Importing Dataset
+```{r}
+train.dat <- read.csv("pml-training.csv")
+dim(train.dat)
+test.dat <- read.csv("pml-testing.csv")
+dim(test.dat)
+# Viewing Strcuture
+str(train.dat)
+```
+
+The training data set is made of 19622 observations on 160 columns. We can see that many columns have NA values or blank values on almost every observation. So we will remove them. Removing firts seven columns since these give information about the people who did the test, and also timestamps. We will not include them in the fitted model
+```{r}
+# Here we get the indexes of the columns having at least 90% of NA or blank values on the training dataset
+indColToRemove <- which(colSums(is.na(train.dat)|train.dat=="")>0.9*dim(train.dat)[1]) 
+trainClean <- train.dat[,-indColToRemove]
+trainClean <- trainClean[,-c(1:7)]
+dim(trainClean)
+```
+
+Applying the same for test dataset
+```{r}
+# Here we get the indexes of the columns having at least 90% of NA or blank values on the testing dataset
+indColToRemove <- which(colSums(is.na(test.dat) |test.dat=="")>0.9*dim(test.dat)[1]) 
+testClean <- test.dat[,-indColToRemove]
+testClean <- testClean[,-c(1:7)]
+dim(testClean)
+```
+
+##Splitting Training dataset
+Splitting the training dataset into two subgroups: training and validation sets, in order to apply three classification Models: 
+**1- Classification tree**
+**2- Random forest**
+**3- Gradient boosting method**
+```{r}
+set.seed(12345)
+inTrain <- createDataPartition(trainClean$classe, p=0.80, list = FALSE)
+train.df <- trainClean[inTrain,]
+validation.df <- trainClean[-inTrain,]
+```
+
+##Fitting the Classification Tree Model
+**1. Fitting the classification tree with using 5-Folds cross validation**
+```{r}
+model_tree <- train(classe ~ .,data = train.df,method="rpart", trControl= trainControl(method = "CV",
+                                                                                   number = 5))
+fancyRpartPlot(model_tree$finalModel)
+```
+
+**2.Generate Classification Tree predictions**
+```{r}
+tree_pred <- predict(model_tree,newdata=validation.df)
+Tree_confMAT <- confusionMatrix(validation.df$classe,tree_pred)
+Tree_confMAT$table
+Tree_confMAT$overall[1]
+```
+
+We can see the calssification tree Accuracy is about 49%
+
+##Fitting the Random Forest Model
+**1. fitting the Random Forest with using 5-Folds cross validation**
+```{r}
+model_rf <- train(classe ~ .,data = train.df,method="rf", trControl= trainControl(method = "CV",
+                                                                                     number = 5),
+                  verbose=FALSE)
+```
+
+**2.Generate Random Forest predictions**
+```{r}
+rf_pred <- predict(model_rf,newdata=validation.df)
+rf_confMAT <- confusionMatrix(validation.df$classe,rf_pred)
+rf_confMAT$table
+rf_confMAT$overall[1]
+```
+with Random Forest calssification tree we achieve Accuracy of **99%**. This is very good
+
+**3. Showing Features Importance**
+```{r}
+MostImpVars <- varImp(model_rf)
+MostImpVars
+```
+
+##Fitting the Gradient Boosting Model
+**1. fitting the Gradient Boosting with using 5-Folds cross validation**
+```{r}
+model_gbm <- train(classe ~ .,data = train.df,method="gbm", trControl= trainControl(method = "CV",
+                                                                                  number = 5),
+                  verbose=FALSE)
+```
+
+**2.Generate Gradient Boosting predictions**
+```{r}
+gbm_pred <- predict(model_gbm,newdata=validation.df)
+gbm_confMAT <- confusionMatrix(validation.df$classe,gbm_pred)
+gbm_confMAT$table
+gbm_confMAT$overall[1]
+```
+
+with Random Forest calssification tree we achieve Accuracy of **96%**. This is very good but with less accuracy than the Random Forest. 
+
+##Conclusion
+Random Forest model is the best one. it will be used to predict the values of classe for the test data set.
+```{r}
+testPred <- predict(model_rf,newdata=testClean)
+testPred
+```
